@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Analytics</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── TOKENS ───────────────────────────────────────── */
+    :root{
+      --bg:          #080a0f;
+      --bg1:         #0e1117;
+      --bg2:         #141820;
+      --bg3:         #1b2030;
+      --border:      rgba(255,255,255,0.06);
+      --border2:     rgba(255,255,255,0.11);
+
+      --gold:        #e8b84b;
+      --gold-dim:    rgba(232,184,75,0.15);
+      --gold-xs:     rgba(232,184,75,0.06);
+      --cyan:        #4ecdc4;
+      --cyan-dim:    rgba(78,205,196,0.15);
+      --rose:        #f76c6c;
+      --rose-dim:    rgba(247,108,108,0.12);
+      --green:       #52d98a;
+      --green-dim:   rgba(82,217,138,0.12);
+      --blue:        #5b9cf6;
+
+      --t1: #f0f2f8;
+      --t2: #8891a8;
+      --t3: #454e63;
+
+      --display: 'Syne', sans-serif;
+      --mono:    'JetBrains Mono', monospace;
+      --r:       8px;
+      --r2:      14px;
+    }
+
+    /* ── RESET ────────────────────────────────────────── */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:16px;-webkit-font-smoothing:antialiased}
+
+    body{
+      font-family:var(--display);
+      background:var(--bg);
+      color:var(--t1);
+      min-height:100vh;
+      overflow-x:hidden;
+    }
+
+    /* Subtle dot-grid background */
+    body::before{
+      content:'';
+      position:fixed;inset:0;
+      background-image:radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size:28px 28px;
+      pointer-events:none;
+      z-index:0;
+    }
+
+    /* ── LOADER ───────────────────────────────────────── */
+    #loader{
+      position:fixed;inset:0;
+      background:var(--bg);
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      z-index:999;
+      transition:opacity .5s ease;
+    }
+    #loader.hide{opacity:0;pointer-events:none}
+    .loader-ring{
+      width:40px;height:40px;
+      border:1.5px solid var(--border2);
+      border-top-color:var(--gold);
+      border-radius:50%;
+      animation:spin .7s linear infinite;
+      margin-bottom:16px;
+    }
+    .loader-txt{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--t3)}
+
+    /* ── LAYOUT ───────────────────────────────────────── */
+    .shell{
+      position:relative;z-index:1;
+      max-width:1300px;margin:0 auto;
+      padding:36px 28px 80px;
+    }
+
+    /* ── HEADER ───────────────────────────────────────── */
+    .hdr{
+      display:flex;align-items:flex-end;justify-content:space-between;
+      padding-bottom:28px;margin-bottom:32px;
+      border-bottom:1px solid var(--border);
+      animation:fadeD .5s ease both;
+    }
+    .hdr-l{}
+    .hdr-badge{
+      display:inline-flex;align-items:center;gap:7px;
+      font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+      text-transform:uppercase;color:var(--gold);margin-bottom:8px;
+    }
+    .hdr-badge-dot{
+      width:6px;height:6px;border-radius:50%;
+      background:var(--gold);box-shadow:0 0 8px var(--gold);
+      animation:pulse 2s ease infinite;
+    }
+    .hdr-title{
+      font-size:clamp(26px,3.5vw,40px);font-weight:800;
+      letter-spacing:-.01em;line-height:1;color:var(--t1);
+    }
+    .hdr-title em{font-style:normal;color:var(--gold)}
+    .hdr-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+    .ts-label{font-family:var(--mono);font-size:11px;color:var(--t3)}
+
+    .btn{
+      display:inline-flex;align-items:center;gap:6px;
+      font-family:var(--display);font-size:12px;font-weight:500;
+      letter-spacing:.03em;
+      padding:8px 16px;border-radius:var(--r);
+      border:1px solid var(--border2);
+      background:var(--bg2);color:var(--t2);
+      cursor:pointer;transition:all .15s;
+    }
+    .btn:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-xs)}
+    .btn svg{width:13px;height:13px}
+
+    /* ── FILTER BAR ───────────────────────────────────── */
+    .filter-bar{
+      display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;
+      background:var(--bg1);
+      border:1px solid var(--border);
+      border-radius:var(--r2);
+      padding:16px 20px;
+      margin-bottom:28px;
+      animation:fadeU .4s .05s ease both;
+    }
+    .filter-group{display:flex;flex-direction:column;gap:5px;flex:1;min-width:140px}
+    .filter-label{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--t3)}
+    .filter-input{
+      background:var(--bg2);border:1px solid var(--border2);
+      border-radius:var(--r);padding:8px 12px;
+      font-family:var(--mono);font-size:12px;color:var(--t1);
+      outline:none;transition:border-color .15s;
+      -webkit-appearance:none;
+    }
+    .filter-input:focus{border-color:var(--gold)}
+    .filter-input option{background:var(--bg2);color:var(--t1)}
+    .filter-actions{display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+    .btn-apply{
+      background:var(--gold);border-color:var(--gold);color:#0a0800;font-weight:700;
+    }
+    .btn-apply:hover{background:#f5cb6d;border-color:#f5cb6d;color:#0a0800}
+    .btn-reset{border-color:var(--border2);color:var(--t3)}
+    .btn-reset:hover{border-color:var(--rose);color:var(--rose);background:var(--rose-dim)}
+
+    /* ── METRIC CARDS ─────────────────────────────────── */
+    .metrics{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+      gap:12px;margin-bottom:20px;
+    }
+    .mcard{
+      background:var(--bg1);
+      border:1px solid var(--border);
+      border-radius:var(--r2);
+      padding:22px 24px;
+      position:relative;overflow:hidden;
+      transition:border-color .2s,transform .2s;
+      animation:fadeU .45s ease both;
+    }
+    .mcard:hover{border-color:var(--border2);transform:translateY(-2px)}
+    .mcard::after{
+      content:'';position:absolute;
+      bottom:-24px;right:-24px;
+      width:70px;height:70px;border-radius:50%;
+      background:var(--accent-glow,rgba(232,184,75,0.05));
+      pointer-events:none;
+    }
+    .mcard:nth-child(1){animation-delay:.05s}
+    .mcard:nth-child(2){animation-delay:.10s;--accent-glow:rgba(82,217,138,0.07)}
+    .mcard:nth-child(3){animation-delay:.15s;--accent-glow:rgba(78,205,196,0.07)}
+    .mcard:nth-child(4){animation-delay:.18s;--accent-glow:rgba(247,108,108,0.07)}
+    .mcard:nth-child(5){animation-delay:.21s;--accent-glow:rgba(91,156,246,0.07)}
+    .mcard:nth-child(6){animation-delay:.24s;--accent-glow:rgba(232,184,75,0.07)}
+
+    .mcard-label{
+      font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+      text-transform:uppercase;color:var(--t3);margin-bottom:10px;
+      display:flex;align-items:center;gap:6px;
+    }
+    .mcard-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+    .mcard-val{
+      font-size:clamp(30px,3.5vw,44px);font-weight:800;
+      line-height:1;letter-spacing:-.02em;
+    }
+    .mcard-sub{font-family:var(--mono);font-size:11px;color:var(--t3);margin-top:6px}
+    .c-gold{color:var(--gold)}.c-green{color:var(--green)}.c-cyan{color:var(--cyan)}
+    .c-rose{color:var(--rose)}.c-blue{color:var(--blue)}
+
+    /* ── SKELETON ─────────────────────────────────────── */
+    .skel{
+      display:inline-block;
+      background:linear-gradient(90deg,var(--bg2) 25%,var(--bg3) 50%,var(--bg2) 75%);
+      background-size:200% 100%;animation:shimmer 1.4s infinite;
+      border-radius:4px;
+    }
+    .skel-v{width:80px;height:40px}
+    .skel-s{width:100px;height:10px;margin-top:8px}
+
+    /* ── CHART GRID ───────────────────────────────────── */
+    .chart-grid{
+      display:grid;grid-template-columns:1.6fr 1fr;
+      gap:12px;margin-bottom:12px;
+      animation:fadeU .45s .25s ease both;
+    }
+    @media(max-width:900px){.chart-grid{grid-template-columns:1fr}}
+
+    /* ── PANEL ────────────────────────────────────────── */
+    .panel{
+      background:var(--bg1);border:1px solid var(--border);
+      border-radius:var(--r2);overflow:hidden;
+    }
+    .panel-hdr{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:16px 22px;border-bottom:1px solid var(--border);
+    }
+    .panel-title{
+      font-size:12px;font-weight:600;letter-spacing:.08em;
+      text-transform:uppercase;color:var(--t2);
+      display:flex;align-items:center;gap:8px;
+    }
+    .panel-dot{width:5px;height:5px;border-radius:50%;background:var(--gold);box-shadow:0 0 6px var(--gold)}
+    .panel-badge{
+      font-family:var(--mono);font-size:10px;color:var(--gold);
+      background:var(--gold-dim);border:1px solid rgba(232,184,75,.2);
+      padding:2px 9px;border-radius:20px;
+    }
+    .panel-body{padding:20px 22px}
+    .chart-wrap{position:relative;height:260px}
+
+    /* ── TABS ─────────────────────────────────────────── */
+    .tabs{display:flex;gap:4px;margin-bottom:16px}
+    .tab{
+      font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+      text-transform:uppercase;padding:5px 12px;border-radius:20px;
+      cursor:pointer;border:1px solid transparent;
+      color:var(--t3);transition:all .15s;background:transparent;
+    }
+    .tab.on{background:var(--gold-dim);border-color:rgba(232,184,75,.25);color:var(--gold)}
+    .tab:hover:not(.on){color:var(--t2);border-color:var(--border2)}
+
+    /* ── LOG TABLE ────────────────────────────────────── */
+    .log-panel{
+      animation:fadeU .45s .35s ease both;
+      margin-bottom:12px;
+    }
+    .tbl-wrap{max-height:340px;overflow-y:auto;
+      scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+    .tbl-wrap::-webkit-scrollbar{width:3px}
+    .tbl-wrap::-webkit-scrollbar-track{background:transparent}
+    .tbl-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    thead th{
+      position:sticky;top:0;z-index:1;
+      background:var(--bg1);
+      padding:9px 16px;text-align:left;
+      font-family:var(--mono);font-size:9px;letter-spacing:.16em;
+      text-transform:uppercase;color:var(--t3);
+      border-bottom:1px solid var(--border);font-weight:400;
+    }
+    tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:hover{background:var(--bg2)}
+    tbody td{padding:10px 16px;color:var(--t2);vertical-align:middle}
+    .td-id{font-family:var(--mono);font-size:10px;color:var(--gold)}
+    .td-email{color:var(--t1);font-size:12px}
+    .td-time{font-family:var(--mono);font-size:10px;color:var(--t3);white-space:nowrap}
+    .td-ua{font-family:var(--mono);font-size:10px;color:var(--t3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tag{
+      display:inline-flex;align-items:center;gap:4px;
+      font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;
+      padding:2px 8px;border-radius:20px;font-weight:500;
+    }
+    .tag-open{background:var(--green-dim);color:var(--green);border:1px solid rgba(82,217,138,.2)}
+    .tag-click{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(78,205,196,.2)}
+
+    /* ── EMPTY STATE ──────────────────────────────────── */
+    .empty{text-align:center;padding:44px 24px;color:var(--t3)}
+    .empty-icon{font-size:28px;margin-bottom:10px;opacity:.3}
+    .empty p{font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+
+    /* ── ERROR BANNER ─────────────────────────────────── */
+    .err-bar{
+      display:none;align-items:center;gap:8px;
+      background:var(--rose-dim);border:1px solid rgba(247,108,108,.3);
+      border-radius:var(--r);padding:10px 14px;
+      font-size:12px;color:var(--rose);margin-bottom:16px;
+    }
+    .err-bar.show{display:flex}
+
+    /* ── STATUS BAR ───────────────────────────────────── */
+    .status-bar{
+      display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+      padding-top:14px;border-top:1px solid var(--border);
+      font-family:var(--mono);font-size:10px;color:var(--t3);
+      animation:fadeU .45s .4s ease both;
+    }
+    .status-live{display:inline-flex;align-items:center;gap:6px}
+    .live-dot{
+      width:6px;height:6px;border-radius:50%;
+      background:var(--green);box-shadow:0 0 8px var(--green);
+      animation:pulse 2s ease infinite;
+    }
+
+    /* ── ANIMATIONS ───────────────────────────────────── */
+    @keyframes fadeD{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeU{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    /* ── RESPONSIVE ───────────────────────────────────── */
+    @media(max-width:640px){
+      .shell{padding:20px 16px 60px}
+      .hdr{flex-direction:column;align-items:flex-start;gap:14px}
+      .metrics{grid-template-columns:1fr 1fr}
+      .filter-bar{flex-direction:column}
+    }
+    @media(max-width:380px){.metrics{grid-template-columns:1fr}}
+  </style>
+</head>
+
+<body>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-ring"></div>
+  <p class="loader-txt">Initialising analytics</p>
+</div>
+
+<!-- APP -->
+<div class="shell">
+
+  <!-- Header -->
+  <header class="hdr">
+    <div class="hdr-l">
+      <div class="hdr-badge"><div class="hdr-badge-dot"></div>Email Analytics Engine</div>
+      <h1 class="hdr-title">Campaign <em>Control</em></h1>
+    </div>
+    <div class="hdr-r">
+      <span class="ts-label" id="ts-label">—</span>
+      <button class="btn" onclick="loadAll()">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M13.5 2.5A6.5 6.5 0 1 1 8 1.5" stroke-linecap="round"/>
+          <path d="M13.5 2.5V6h-3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Error banner -->
+  <div class="err-bar" id="err-bar">⚠ &nbsp;<span id="err-msg">Failed to load data.</span></div>
+
+  <!-- ── FILTER BAR ── -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label class="filter-label">From date</label>
+      <input type="date" class="filter-input" id="f-from" />
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">To date</label>
+      <input type="date" class="filter-input" id="f-to" />
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Recipient</label>
+      <select class="filter-input" id="f-email">
+        <option value="">All recipients</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Event type</label>
+      <select class="filter-input" id="f-type">
+        <option value="">Opens + Clicks</option>
+        <option value="open">Opens only</option>
+        <option value="click">Clicks only</option>
+      </select>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-apply" onclick="applyFilters()">Apply</button>
+      <button class="btn btn-reset"  onclick="resetFilters()">Reset</button>
+    </div>
+  </div>
+
+  <!-- ── METRIC CARDS ── -->
+  <div class="metrics" id="metrics">
+    <!-- skeleton -->
+    <div class="mcard"><div class="mcard-label"><div class="mcard-dot" style="background:var(--gold)"></div>Total Sent</div><div class="mcard-val"><span class="skel skel-v"></span></div><div class="mcard-sub"><span class="skel skel-s"></span></div></div>
+    <div class="mcard"><div class="mcard-label"><div class="mcard-dot" style="background:var(--green)"></div>Total Opens</div><div class="mcard-val"><span class="skel skel-v"></span></div><div class="mcard-sub"><span class="skel skel-s"></span></div></div>
+    <div class="mcard"><div class="mcard-label"><div class="mcard-dot" style="background:var(--cyan)"></div>Total Clicks</div><div class="mcard-val"><span class="skel skel-v"></span></div><div class="mcard-sub"><span class="skel skel-s"></span></div></div>
+    <div class="mcard"><div class="mcard-label"><div class="mcard-dot" style="background:var(--gold)"></div>Open Rate</div><div class="mcard-val"><span class="skel skel-v"></span></div><div class="mcard-sub"><span class="skel skel-s"></span></div></div>
+    <div class="mcard"><div class="mcard-label"><div class="mcard-dot" style="background:var(--rose)"></div>Click Rate</div><div class="mcard-val"><span class="skel skel-v"></span></div><div class="mcard-sub"><span class="skel skel-s"></span></div></div>
+    <div class="mcard"><div class="mcard-label"><div class="mcard-dot" style="background:var(--blue)"></div>Unique Openers</div><div class="mcard-val"><span class="skel skel-v"></span></div><div class="mcard-sub"><span class="skel skel-s"></span></div></div>
+  </div>
+
+  <!-- ── CHARTS ── -->
+  <div class="chart-grid">
+
+    <!-- Timeline chart -->
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title"><div class="panel-dot"></div>Timeline</div>
+        <div class="panel-badge" id="timeline-badge">—</div>
+      </div>
+      <div class="panel-body">
+        <!-- Opens / Clicks tab toggle -->
+        <div class="tabs">
+          <button class="tab on" id="tab-both"   onclick="setTimelineTab('both')">Both</button>
+          <button class="tab"    id="tab-opens"  onclick="setTimelineTab('opens')">Opens</button>
+          <button class="tab"    id="tab-clicks" onclick="setTimelineTab('clicks')">Clicks</button>
+        </div>
+        <div class="chart-wrap"><canvas id="timeline-chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Hour chart -->
+    <div class="panel">
+      <div class="panel-hdr">
+        <div class="panel-title"><div class="panel-dot" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></div>Opens by Hour</div>
+        <div class="panel-badge">IST</div>
+      </div>
+      <div class="panel-body">
+        <div class="chart-wrap"><canvas id="hour-chart"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── LOG TABLE ── -->
+  <div class="panel log-panel">
+    <div class="panel-hdr">
+      <div class="panel-title"><div class="panel-dot" style="background:var(--cyan);box-shadow:0 0 6px var(--cyan)"></div>Event Log</div>
+      <div class="panel-badge" id="log-badge">—</div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>User ID</th><th>Email</th><th>Event</th><th>Timestamp (IST)</th><th>User Agent</th>
+          </tr>
+        </thead>
+        <tbody id="log-body">
+          <tr><td colspan="5"><div class="empty"><div class="empty-icon">◌</div><p>Loading…</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span class="status-live"><span class="live-dot"></span>Live</span>
+    <span id="sb-sent">Sent: —</span>
+    <span id="sb-opens">Opens: —</span>
+    <span id="sb-clicks">Clicks: —</span>
+    <span id="sb-rate">Open rate: —</span>
+    <span id="sb-ctr">CTR: —</span>
+  </div>
+
+</div><!-- /.shell -->
+
+<script>
+/* ============================================================
+   CHART DEFAULTS
+============================================================ */
+Chart.defaults.color         = '#454e63';
+Chart.defaults.borderColor   = 'rgba(255,255,255,0.06)';
+Chart.defaults.font.family   = "'JetBrains Mono', monospace";
+Chart.defaults.font.size     = 11;
+
+/* ============================================================
+   STATE
+============================================================ */
+let timelineChart = null;
+let hourChart     = null;
+let analyticsData = null;   // last analytics response
+let timelineTab   = 'both'; // 'both' | 'opens' | 'clicks'
+
+/* ============================================================
+   ENTRY POINT
+============================================================ */
+function loadAll() {
+  showErr(false);
+  loadAnalytics();
+}
+
+/* ============================================================
+   ANALYTICS
+============================================================ */
+function loadAnalytics() {
+  const filters = getFilters();
+  google.script.run
+    .withSuccessHandler(onAnalytics)
+    .withFailureHandler(onFail)
+    .getAnalytics(filters);
+}
+
+function onAnalytics(d) {
+  if (!d) { showErr(true, 'getAnalytics() returned nothing.'); hideLoader(); return; }
+  analyticsData = d;
+
+  // Populate email dropdown (once, from unfiltered data)
+  populateEmailDropdown(d.allEmails || []);
+
+  renderMetrics(d);
+  renderTimeline(d.opensByDay || [], d.clicksByDay || []);
+  renderHourChart(d.opensByHour || []);
+  loadLogs();
+
+  // Status bar
+  document.getElementById('sb-sent').textContent   = 'Sent: '   + (d.totalEmailsSent || 0);
+  document.getElementById('sb-opens').textContent  = 'Opens: '  + (d.totalOpens      || 0);
+  document.getElementById('sb-clicks').textContent = 'Clicks: ' + (d.totalClicks     || 0);
+  document.getElementById('sb-rate').textContent   = 'Open rate: '+ (d.openRate      || '0%');
+  document.getElementById('sb-ctr').textContent    = 'CTR: '     + (d.clickRate      || '0%');
+
+  document.getElementById('ts-label').textContent  = 'Updated ' + new Date().toLocaleTimeString('en-IN');
+  hideLoader();
+}
+
+function onFail(err) {
+  showErr(true, (err && err.message) || String(err));
+  renderMetrics({totalEmailsSent:0,totalOpens:0,totalClicks:0,openRate:'0%',clickRate:'0%',uniqueOpeners:0,uniqueClickers:0});
+  renderTimeline([], []);
+  renderHourChart([]);
+  hideLoader();
+}
+
+/* ============================================================
+   LOGS
+============================================================ */
+function loadLogs() {
+  const filters = getFilters();
+  google.script.run
+    .withSuccessHandler(onLogs)
+    .withFailureHandler(err => {
+      document.getElementById('log-body').innerHTML =
+        `<tr><td colspan="5"><div class="empty"><div class="empty-icon">✗</div><p>${esc(String(err))}</p></div></td></tr>`;
+      document.getElementById('log-badge').textContent = 'error';
+    })
+    .getLogs(filters);
+}
+
+function onLogs(rows) {
+  const tbody = document.getElementById('log-body');
+  const badge = document.getElementById('log-badge');
+
+  if (!rows || !rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty"><div class="empty-icon">◌</div><p>No events recorded yet.</p></div></td></tr>`;
+    badge.textContent = '0 events';
+    return;
+  }
+
+  badge.textContent = rows.length + ' event' + (rows.length !== 1 ? 's' : '');
+
+  tbody.innerHTML = [...rows].reverse().map(r => {
+    const isClick = r.type === 'click';
+    const tag = isClick
+      ? `<span class="tag tag-click">click</span>`
+      : `<span class="tag tag-open">open</span>`;
+    const ua  = (r.userAgent && r.userAgent !== 'N/A')
+      ? r.userAgent.substring(0,70) + (r.userAgent.length > 70 ? '…' : '')
+      : '—';
+    return `<tr>
+      <td class="td-id">${esc(r.id||'—')}</td>
+      <td class="td-email">${esc(r.email||'—')}</td>
+      <td>${tag}</td>
+      <td class="td-time">${esc(r.timestamp||'—')}</td>
+      <td class="td-ua" title="${esc(r.userAgent||'')}">${esc(ua)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ============================================================
+   FILTERS
+============================================================ */
+function getFilters() {
+  return {
+    dateFrom: document.getElementById('f-from').value  || null,
+    dateTo:   document.getElementById('f-to').value    || null,
+    email:    document.getElementById('f-email').value || null,
+    type:     document.getElementById('f-type').value  || null,
+  };
+}
+
+function applyFilters() { loadAll(); }
+
+function resetFilters() {
+  document.getElementById('f-from').value  = '';
+  document.getElementById('f-to').value    = '';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-type').value  = '';
+  loadAll();
+}
+
+function populateEmailDropdown(emails) {
+  const sel = document.getElementById('f-email');
+  const cur = sel.value;
+  // Keep only the first "All recipients" option, then re-add
+  while (sel.options.length > 1) sel.remove(1);
+  emails.forEach(e => {
+    const o = document.createElement('option');
+    o.value = e; o.textContent = e;
+    if (e === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+/* ============================================================
+   RENDER METRICS
+============================================================ */
+function renderMetrics(d) {
+  document.getElementById('metrics').innerHTML = `
+    <div class="mcard">
+      <div class="mcard-label"><div class="mcard-dot" style="background:var(--gold)"></div>Total Sent</div>
+      <div class="mcard-val">${(d.totalEmailsSent||0).toLocaleString()}</div>
+      <div class="mcard-sub">Emails dispatched</div>
+    </div>
+    <div class="mcard">
+      <div class="mcard-label"><div class="mcard-dot" style="background:var(--green)"></div>Total Opens</div>
+      <div class="mcard-val c-green">${(d.totalOpens||0).toLocaleString()}</div>
+      <div class="mcard-sub">Pixel triggers</div>
+    </div>
+    <div class="mcard">
+      <div class="mcard-label"><div class="mcard-dot" style="background:var(--cyan)"></div>Total Clicks</div>
+      <div class="mcard-val c-cyan">${(d.totalClicks||0).toLocaleString()}</div>
+      <div class="mcard-sub">Link clicks tracked</div>
+    </div>
+    <div class="mcard">
+      <div class="mcard-label"><div class="mcard-dot" style="background:var(--gold)"></div>Open Rate</div>
+      <div class="mcard-val c-gold">${d.openRate||'0%'}</div>
+      <div class="mcard-sub">Opens ÷ Sent</div>
+    </div>
+    <div class="mcard">
+      <div class="mcard-label"><div class="mcard-dot" style="background:var(--rose)"></div>Click Rate (CTR)</div>
+      <div class="mcard-val c-rose">${d.clickRate||'0%'}</div>
+      <div class="mcard-sub">Clicks ÷ Opens</div>
+    </div>
+    <div class="mcard">
+      <div class="mcard-label"><div class="mcard-dot" style="background:var(--blue)"></div>Unique Openers</div>
+      <div class="mcard-val">${(d.uniqueOpeners||0).toLocaleString()}</div>
+      <div class="mcard-sub">${(d.uniqueClickers||0)} unique clickers</div>
+    </div>`;
+}
+
+/* ============================================================
+   TIMELINE CHART (opens + clicks by day)
+============================================================ */
+function setTimelineTab(tab) {
+  timelineTab = tab;
+  ['both','opens','clicks'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('on', t === tab);
+  });
+  if (analyticsData) {
+    renderTimeline(analyticsData.opensByDay || [], analyticsData.clicksByDay || []);
+  }
+}
+
+function renderTimeline(opensByDay, clicksByDay) {
+  const ctx = document.getElementById('timeline-chart').getContext('2d');
+
+  const allDates = [...new Set([
+    ...opensByDay.map(d => d.date),
+    ...clicksByDay.map(d => d.date),
+  ])].sort();
+
+  const badge = document.getElementById('timeline-badge');
+  badge.textContent = allDates.length ? allDates.length + ' day' + (allDates.length!==1?'s':'') : 'No data';
+
+  if (timelineChart) timelineChart.destroy();
+
+  if (!allDates.length) { renderEmptyCanvas(ctx, 'No events yet'); return; }
+
+  const openCounts  = allDates.map(d => (opensByDay.find(x=>x.date===d)||{count:0}).count);
+  const clickCounts = allDates.map(d => (clicksByDay.find(x=>x.date===d)||{count:0}).count);
+
+  const datasets = [];
+  if (timelineTab === 'both' || timelineTab === 'opens') {
+    datasets.push({
+      label: 'Opens',
+      data: openCounts,
+      borderColor: '#52d98a',
+      backgroundColor: 'rgba(82,217,138,0.08)',
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: '#52d98a',
+      pointBorderColor: '#080a0f',
+      pointBorderWidth: 2,
+      tension: 0.35,
+      fill: true,
+    });
+  }
+  if (timelineTab === 'both' || timelineTab === 'clicks') {
+    datasets.push({
+      label: 'Clicks',
+      data: clickCounts,
+      borderColor: '#4ecdc4',
+      backgroundColor: 'rgba(78,205,196,0.06)',
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: '#4ecdc4',
+      pointBorderColor: '#080a0f',
+      pointBorderWidth: 2,
+      tension: 0.35,
+      fill: true,
+    });
+  }
+
+  timelineChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: allDates, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: timelineTab === 'both',
+          labels: { color: '#8891a8', boxWidth: 10, font: { size: 11 } },
+        },
+        tooltip: _tooltip(),
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { maxTicksLimit: 7 } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: true, ticks: { precision: 0 } },
+      }
+    }
+  });
+}
+
+/* ============================================================
+   HOUR CHART (opens by hour IST)
+============================================================ */
+function renderHourChart(opensByHour) {
+  const ctx = document.getElementById('hour-chart').getContext('2d');
+  const counts = Array(24).fill(0);
+  opensByHour.forEach(d => { counts[d.hour] = d.count; });
+  const labels = Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00');
+  const max    = Math.max(...counts);
+
+  if (hourChart) hourChart.destroy();
+  if (!opensByHour.length) { renderEmptyCanvas(ctx, 'No opens yet'); return; }
+
+  hourChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Opens',
+        data: counts,
+        backgroundColor: counts.map(v => v === max && v > 0 ? 'rgba(232,184,75,0.9)' : 'rgba(232,184,75,0.22)'),
+        borderColor:     counts.map(v => v === max && v > 0 ? '#e8b84b' : 'rgba(232,184,75,0.4)'),
+        borderWidth: 1,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: _tooltip() },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 12, font: { size: 9 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: true, ticks: { precision: 0 } },
+      }
+    }
+  });
+}
+
+/* ============================================================
+   SHARED CHART HELPERS
+============================================================ */
+function _tooltip() {
+  return {
+    backgroundColor: '#141820',
+    borderColor:     'rgba(255,255,255,0.1)',
+    borderWidth: 1,
+    titleColor: '#e8b84b',
+    bodyColor:  '#f0f2f8',
+    padding: 10,
+  };
+}
+
+function renderEmptyCanvas(ctx, msg) {
+  new Chart(ctx, {
+    type:'line',data:{labels:[''],datasets:[{data:[0]}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{x:{display:false},y:{display:false}},
+    }
+  });
+  ctx.save();
+  ctx.fillStyle='#454e63';
+  ctx.font="12px 'JetBrains Mono',monospace";
+  ctx.textAlign='center';
+  ctx.fillText(msg, ctx.canvas.width/2, ctx.canvas.height/2);
+  ctx.restore();
+}
+
+/* ============================================================
+   UTILITIES
+============================================================ */
+function hideLoader() { document.getElementById('loader').classList.add('hide'); }
+function showErr(v, msg) {
+  document.getElementById('err-bar').classList.toggle('show', v);
+  if (msg) document.getElementById('err-msg').textContent = msg;
+}
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ============================================================
+   BOOT
+============================================================ */
+document.addEventListener('DOMContentLoaded', loadAll);
+</script>
+</body>
+</html>
